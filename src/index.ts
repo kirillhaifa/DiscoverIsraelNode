@@ -1,5 +1,13 @@
 import app from './app';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+});
+
 const PORT = process.env.PORT || 3001;
 
 app.listen(Number(PORT), '0.0.0.0', () => {
