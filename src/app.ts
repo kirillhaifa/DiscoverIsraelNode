@@ -11,7 +11,24 @@ import { errorHandler } from './middleware/errorHandler';
 const app = express();
 
 // --- Middleware ---
-app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://kirillhaifa.github.io'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, true); // allow temporarily to avoid blocking
+  },
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  credentials: true
+}));
+
+app.options('*', cors());
+
 app.use(express.json());
 
 // --- Routes ---
