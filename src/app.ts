@@ -23,11 +23,9 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) return callback(null, true);
     return callback(null, true); // allow temporarily to avoid blocking
   },
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  methods: ['GET','POST','PUT','PATCH','DELETE'],
   credentials: true
 }));
-
-app.options('*', cors());
 
 app.use(express.json());
 
