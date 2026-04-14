@@ -35,6 +35,15 @@ export interface Place {
   ratingsCount?: number;
 }
 
+export interface PlacesFilter {
+  region?: string;
+  tags?: PlaceTag[];       // ANY совпадение
+  religions?: Religion[];  // ANY совпадение
+  free?: boolean;          // tags.includes('free') || ticketPrice.adult === null
+  minRating?: number;
+  maxVisitTime?: number;   // minVisitTime <= maxVisitTime
+}
+
 export interface Rating {
   placeId: string;
   rating: number;
