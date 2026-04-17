@@ -104,3 +104,38 @@ export async function getPlaceById(id: string): Promise<Place | null> {
   if (!docRef.exists) return null;
   return normalizePlace(docRef.id, docRef.data()!);
 }
+
+/**
+ * Создать новое место + сбросить полный кэш.
+ */
+export async function createPlace(data: Omit<Place, 'id'>): Promise<Place> {
+  const docRef = await db.collection('places').add(data);
+  const place = normalizePlace(docRef.id, data as FirebaseFirestore.DocumentData);
+  await invalidatePlacesCache(); // полный сброс — новый список будет запрошен при след запросе
+  return place;
+}
+
+/**
+ * Обновить произвольные поля места + точечно обновить кэш через updatePlaceInCache.
+ */
+export async function updatePlace(
+  id: string,
+  fields: Partial<Record<string, any>>
+): Promise<Place> {
+  await db.collection('places').doc(id).update(fields);
+  const updated = await db.collection('places').doc(id).get();
+  const place = normalizePlace(id, updated.data()!);
+
+  // Точечно обновляем весь объект в кэше
+  const cached = await redisClient.get(CACHE_KEY);
+  if (cached) {
+    const places: Place[] = JSON.parse(cached);
+    const idx = places.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      places[idx] = place;
+      await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(places));
+    }
+  }
+
+  return place;
+}

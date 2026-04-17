@@ -13,4 +13,10 @@ router.delete('/cache', authenticate, requireAdmin, placesController.invalidateC
 // GET /api/places/:id — одно место по ID
 router.get('/:id', placesController.getById);
 
+// POST /api/places — создать место (только admin)
+router.post('/', authenticate, requireAdmin, placesController.createPlace);
+
+// PATCH /api/places/:id — обновить поля места (только admin)
+router.patch('/:id', authenticate, requireAdmin, placesController.updatePlace);
+
 export default router;

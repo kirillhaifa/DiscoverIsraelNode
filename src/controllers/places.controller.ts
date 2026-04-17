@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as placesService from '../services/places.service';
-import { PlacesFilter } from '../types';
+import { Place, PlacesFilter } from '../types';
 
 export async function getAll(req: Request, res: Response, next: NextFunction) {
   try {
@@ -39,6 +39,31 @@ export async function getById(req: Request<{ id: string }>, res: Response, next:
       res.status(404).json({ error: 'Place not found' });
       return;
     }
+    res.json({ data: place });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/places — создать место (admin only)
+ */
+export async function createPlace(req: Request, res: Response, next: NextFunction) {
+  try {
+    const place = await placesService.createPlace(req.body as Omit<Place, 'id'>);
+    res.status(201).json({ data: place });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/places/:id — обновить поля места (admin only)
+ */
+export async function updatePlace(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const place = await placesService.updatePlace(id, req.body);
     res.json({ data: place });
   } catch (err) {
     next(err);
