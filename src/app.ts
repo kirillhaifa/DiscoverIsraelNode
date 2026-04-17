@@ -8,6 +8,7 @@ import placesRoutes from './routes/places.routes';
 import authRoutes from './routes/auth.routes';
 import usersRoutes from './routes/users.routes';
 import ratingsRoutes from './routes/ratings.routes';
+import collectionsRoutes from './routes/collections.routes';
 import wishlistRoutes from './routes/wishlist.routes';
 import { errorHandler } from './middleware/errorHandler';
 
@@ -42,6 +43,7 @@ app.use('/api/places', placesRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/users/me/wishlist', wishlistRoutes);
 app.use('/api/ratings', ratingsRoutes);
+app.use('/api/collections', collectionsRoutes);
 
 // --- Error handler (должен быть последним) ---
 app.use(errorHandler);

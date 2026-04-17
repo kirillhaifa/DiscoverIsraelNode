@@ -50,6 +50,30 @@ export interface Rating {
   rating: number;
 }
 
+export interface Collection {
+  id: string;
+  title: { ru: string; en: string; he: string };
+  shortDescription: { ru: string; en: string; he: string };
+  longDescription: { ru: string; en: string; he: string };
+  coverPhoto: string;
+  collectionPhotos?: string[];
+  placeIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  isPublic: boolean;
+}
+
+export interface CreateCollectionData {
+  title: { ru: string; en: string; he: string };
+  shortDescription: { ru: string; en: string; he: string };
+  longDescription: { ru: string; en: string; he: string };
+  coverPhoto: string;
+  collectionPhotos?: string[];
+  placeIds: string[];
+  isPublic: boolean;
+}
+
 export interface User {
   userID: string;
   name: string | null;
