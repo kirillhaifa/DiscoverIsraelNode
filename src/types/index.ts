@@ -59,7 +59,8 @@ export interface User {
   profilePicture: string | null;
   joinDate: unknown;
   ratings: Rating[];
-  plans: string[];       // wishlist (сердечко)
+  plans: string[];       // legacy
+  wishlist: string[];    // wishlist (сердечко)
   role: 'user' | 'admin';
   language: 'en' | 'he' | 'ru';
   colorTheme: 'light' | 'dark';

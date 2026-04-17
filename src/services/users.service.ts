@@ -29,7 +29,7 @@ export async function createUserIfNotExists(data: CreateUserData): Promise<User>
   const userDoc = await userRef.get();
 
   if (!userDoc.exists) {
-    const newUser: Omit<User, 'wishlist'> & { joinDate: Date } = {
+    const newUser: User & { joinDate: Date } = {
       userID: data.userID,
       name: data.name,
       surname: data.surname,
@@ -38,7 +38,8 @@ export async function createUserIfNotExists(data: CreateUserData): Promise<User>
       profilePicture: data.profilePicture,
       joinDate: new Date(),
       ratings: [],
-      plans: [],
+      plans: [],    // legacy — оставляем пустым для совместимости
+      wishlist: [], // ← вишлист (сердечко)
       role: 'user',
       language: data.language ?? 'en',
       colorTheme: data.colorTheme ?? 'light',
