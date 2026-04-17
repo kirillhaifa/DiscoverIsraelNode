@@ -46,6 +46,25 @@ export async function invalidatePlacesCache(): Promise<void> {
   await redisClient.del(CACHE_KEY);
 }
 
+/**
+ * Точечно обновляет одно место в Redis-кэше без полного сброса.
+ * Используется после изменения рейтинга — не инвалидирует весь кэш.
+ */
+export async function updatePlaceInCache(
+  placeId: string,
+  fields: Partial<Pick<Place, 'averageRating' | 'ratingsCount' | 'ratingsSum'>>,
+): Promise<void> {
+  const cached = await redisClient.get(CACHE_KEY);
+  if (!cached) return; // кэша нет — нечего обновлять, следующий запрос сам заполнит
+
+  const places: Place[] = JSON.parse(cached);
+  const idx = places.findIndex((p) => p.id === placeId);
+  if (idx === -1) return;
+
+  places[idx] = { ...places[idx], ...fields };
+  await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(places));
+}
+
 export async function getPlaces(filters: PlacesFilter = {}): Promise<Place[]> {
   let places = await getAllPlaces();
 

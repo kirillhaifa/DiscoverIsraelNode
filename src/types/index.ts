@@ -31,8 +31,9 @@ export interface Place {
   googleMapsLink: string;
   minVisitTime: number;
   favoriteMonths: Record<string, boolean>;
-  averageRating?: number;
-  ratingsCount?: number;
+  averageRating?: number;   // ratingsSum / ratingsCount, обновляется атомарно
+  ratingsCount?: number;    // кол-во оценок
+  ratingsSum?: number;      // сумма всех оценок — нужна для пересчёта без скана Users
 }
 
 export interface PlacesFilter {

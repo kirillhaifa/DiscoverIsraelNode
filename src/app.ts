@@ -7,6 +7,7 @@ dotenv.config();
 import placesRoutes from './routes/places.routes';
 import authRoutes from './routes/auth.routes';
 import usersRoutes from './routes/users.routes';
+import ratingsRoutes from './routes/ratings.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -38,6 +39,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/places', placesRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/ratings', ratingsRoutes);
 
 // --- Error handler (должен быть последним) ---
 app.use(errorHandler);
