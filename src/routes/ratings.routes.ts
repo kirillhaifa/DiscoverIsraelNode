@@ -4,6 +4,9 @@ import { authenticate } from '../middleware/authenticate';
 
 const router = Router();
 
+// GET /api/ratings/my — оценки текущего пользователя (приватно)
+router.get('/my', authenticate, ratingsController.getMyRatings);
+
 // GET /api/ratings/:placeId — средний рейтинг места (публично)
 router.get('/:placeId', ratingsController.getByPlace);
 

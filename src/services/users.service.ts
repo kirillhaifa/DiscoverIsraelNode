@@ -29,7 +29,7 @@ export async function createUserIfNotExists(data: CreateUserData): Promise<User>
   const userDoc = await userRef.get();
 
   if (!userDoc.exists) {
-    const newUser: User & { joinDate: Date } = {
+    const newUser = {
       userID: data.userID,
       name: data.name,
       surname: data.surname,
@@ -37,7 +37,7 @@ export async function createUserIfNotExists(data: CreateUserData): Promise<User>
       premiumStatus: false,
       profilePicture: data.profilePicture,
       joinDate: new Date(),
-      ratings: [],
+      ratings: [],  // храним в Firestore для транзакций
       plans: [],    // legacy — оставляем пустым для совместимости
       wishlist: [], // ← вишлист (сердечко)
       role: 'user',
@@ -45,10 +45,26 @@ export async function createUserIfNotExists(data: CreateUserData): Promise<User>
       colorTheme: data.colorTheme ?? 'light',
     };
     await userRef.set(newUser);
-    return newUser as unknown as User;
+    // Возвращаем только поля профиля (без ratings — они в Firestore для транзакций)
+    const { ratings: _r, ...profile } = newUser;
+    return profile as unknown as User;
   }
 
-  return { ...userDoc.data(), userID: data.userID } as User;
+  const d = userDoc.data()!;
+  return {
+    userID: data.userID,
+    name: d.name ?? null,
+    surname: d.surname ?? null,
+    email: d.email ?? '',
+    premiumStatus: d.premiumStatus ?? false,
+    profilePicture: d.profilePicture ?? null,
+    joinDate: d.joinDate,
+    plans: d.plans ?? [],
+    wishlist: d.wishlist ?? [],
+    role: d.role ?? 'user',
+    language: d.language ?? 'en',
+    colorTheme: d.colorTheme ?? 'light',
+  } as User;
 }
 
 /**
@@ -62,7 +78,21 @@ export async function getUserById(uid: string): Promise<User | null> {
     return null;
   }
 
-  return { ...userDoc.data(), userID: uid } as User;
+  const d = userDoc.data()!;
+  return {
+    userID: uid,
+    name: d.name ?? null,
+    surname: d.surname ?? null,
+    email: d.email ?? '',
+    premiumStatus: d.premiumStatus ?? false,
+    profilePicture: d.profilePicture ?? null,
+    joinDate: d.joinDate,
+    plans: d.plans ?? [],
+    wishlist: d.wishlist ?? [],
+    role: d.role ?? 'user',
+    language: d.language ?? 'en',
+    colorTheme: d.colorTheme ?? 'light',
+  } as User;
 }
 
 /**
@@ -90,5 +120,19 @@ export async function updateUser(uid: string, data: UpdateUserData): Promise<Use
   await userRef.update(safeData);
 
   const updated = await userRef.get();
-  return { ...updated.data(), userID: uid } as User;
+  const d = updated.data()!;
+  return {
+    userID: uid,
+    name: d.name ?? null,
+    surname: d.surname ?? null,
+    email: d.email ?? '',
+    premiumStatus: d.premiumStatus ?? false,
+    profilePicture: d.profilePicture ?? null,
+    joinDate: d.joinDate,
+    plans: d.plans ?? [],
+    wishlist: d.wishlist ?? [],
+    role: d.role ?? 'user',
+    language: d.language ?? 'en',
+    colorTheme: d.colorTheme ?? 'light',
+  } as User;
 }

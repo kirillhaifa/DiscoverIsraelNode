@@ -82,7 +82,6 @@ export interface User {
   premiumStatus: boolean;
   profilePicture: string | null;
   joinDate: unknown;
-  ratings: Rating[];
   plans: string[];       // legacy
   wishlist: string[];    // wishlist (сердечко)
   role: 'user' | 'admin';

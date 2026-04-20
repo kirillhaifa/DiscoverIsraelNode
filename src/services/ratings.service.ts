@@ -134,6 +134,18 @@ export async function deleteRating(uid: string, placeId: string): Promise<void> 
 }
 
 /**
+ * Получить все оценки текущего пользователя.
+ */
+export async function getMyRatings(uid: string): Promise<RatingEntry[]> {
+  const userRef = db.collection(USERS_COLLECTION).doc(uid);
+  const userDoc = await userRef.get();
+
+  if (!userDoc.exists) throw new Error('User does not exist.');
+
+  return (userDoc.data()!.ratings ?? []) as RatingEntry[];
+}
+
+/**
  * Получить средний рейтинг места — читает одно поле одного документа.
  */
 export async function getRatingsByPlace(placeId: string): Promise<PlaceRatingSummary> {

@@ -2,6 +2,20 @@ import { Request, Response, NextFunction } from 'express';
 import * as ratingsService from '../services/ratings.service';
 
 /**
+ * GET /api/ratings/my
+ * Возвращает все оценки текущего пользователя.
+ */
+export async function getMyRatings(req: Request, res: Response, next: NextFunction) {
+  try {
+    const uid = req.user!.uid;
+    const ratings = await ratingsService.getMyRatings(uid);
+    res.json({ data: ratings });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /api/ratings
  * Body: { placeId: string, rating: number (1-10) }
  * Добавляет или обновляет оценку текущего пользователя.
