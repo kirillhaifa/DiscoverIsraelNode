@@ -5,6 +5,8 @@ import {
   getUserCollections,
   getCollectionById,
   createCollection,
+  updateCollection,
+  deleteCollection,
 } from '../services/collections.service';
 
 /**
@@ -72,6 +74,35 @@ export async function createCollectionHandler(req: Request, res: Response, next:
     const uid = (req as any).user.uid;
     const collection = await createCollection(req.body, uid);
     res.status(201).json({ data: collection });
+  } catch (error) {
+    next(error);
+  }
+}
+/**
+ * PATCH /api/collections/:id
+ * Обновить коллекцию (только admin).
+ */
+export async function updateCollectionHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const updated = await updateCollection(req.params.id as string, req.body);
+    if (!updated) {
+      res.status(404).json({ error: 'Collection not found' });
+      return;
+    }
+    res.json({ data: updated });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * DELETE /api/collections/:id
+ * Удалить коллекцию (только admin).
+ */
+export async function deleteCollectionHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    await deleteCollection(req.params.id as string);
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

@@ -11,6 +11,7 @@ import ratingsRoutes from './routes/ratings.routes';
 import collectionsRoutes from './routes/collections.routes';
 import wishlistRoutes from './routes/wishlist.routes';
 import collectionGroupsRoutes from './routes/collectionGroups.routes';
+import adminRoutes from './routes/admin.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -50,6 +51,7 @@ app.use('/api/users/me/wishlist', wishlistRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/collections', collectionsRoutes);
 app.use('/api/collection-groups', collectionGroupsRoutes);
+app.use('/api/admin', adminRoutes);
 
 // --- Error handler (должен быть последним) ---
 app.use(errorHandler);

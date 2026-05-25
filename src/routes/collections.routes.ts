@@ -19,4 +19,10 @@ router.get('/:id', collectionsController.getCollection);
 // POST /api/collections         — создать коллекцию
 router.post('/', authenticate, collectionsController.createCollectionHandler);
 
+// PATCH /api/collections/:id     — обновить коллекцию (только admin)
+router.patch('/:id', authenticate, requireAdmin, collectionsController.updateCollectionHandler);
+
+// DELETE /api/collections/:id    — удалить коллекцию (только admin)
+router.delete('/:id', authenticate, requireAdmin, collectionsController.deleteCollectionHandler);
+
 export default router;

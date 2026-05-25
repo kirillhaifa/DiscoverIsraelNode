@@ -75,3 +75,34 @@ export async function createCollection(
 
   return { id: docRef.id, ...payload };
 }
+
+/**
+ * Обновить коллекцию + инвалидировать кэш.
+ */
+export async function updateCollection(
+  id: string,
+  data: Partial<CreateCollectionData>
+): Promise<Collection | null> {
+  const now = new Date().toISOString();
+  const ref = db.collection(COLLECTIONS_COLLECTION).doc(id);
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+  await ref.update({ ...data, updatedAt: now });
+  await redisClient.del(CACHE_KEY); // инвалидируем всегда — публичность могла измениться
+  return { id, ...doc.data(), ...data, updatedAt: now } as Collection;
+}
+
+/**
+ * Удалить коллекцию + инвалидировать кэш.
+ */
+export async function deleteCollection(id: string): Promise<void> {
+  await db.collection(COLLECTIONS_COLLECTION).doc(id).delete();
+  await redisClient.del(CACHE_KEY);
+}
+
+/**
+ * Инвалидировать публичный кэш вручную (для admin).
+ */
+export async function invalidateCollectionsCache(): Promise<void> {
+  await redisClient.del(CACHE_KEY);
+}
