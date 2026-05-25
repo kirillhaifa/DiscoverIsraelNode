@@ -74,6 +74,31 @@ export interface CreateCollectionData {
   isPublic: boolean;
 }
 
+/**
+ * Группа коллекций — виджет на лендинге.
+ * Содержит список id коллекций которые показываются вместе под одним заголовком.
+ */
+export interface CollectionGroup {
+  id: string;
+  title: { ru: string; en: string; he: string };
+  description: { ru: string; en: string; he: string };
+  collectionIds: string[];  // id из коллекции `collections`
+  coverPhoto: string;
+  order: number;            // порядок отображения на лендинге
+  isPublic: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCollectionGroupData {
+  title: { ru: string; en: string; he: string };
+  description: { ru: string; en: string; he: string };
+  collectionIds: string[];
+  coverPhoto: string;
+  order: number;
+  isPublic: boolean;
+}
+
 export interface User {
   userID: string;
   name: string | null;

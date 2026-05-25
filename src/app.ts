@@ -10,16 +10,21 @@ import usersRoutes from './routes/users.routes';
 import ratingsRoutes from './routes/ratings.routes';
 import collectionsRoutes from './routes/collections.routes';
 import wishlistRoutes from './routes/wishlist.routes';
+import collectionGroupsRoutes from './routes/collectionGroups.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 
 // --- Middleware ---
+const configuredClientUrl = process.env.CLIENT_URL;
 const allowedOrigins = [
+  configuredClientUrl,
   'http://localhost:3000',
+  'http://localhost:3007',
+  'http://localhost:8081',
   'http://localhost:5173',
   'https://kirillhaifa.github.io'
-];
+].filter(Boolean) as string[];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -44,6 +49,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/users/me/wishlist', wishlistRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/collections', collectionsRoutes);
+app.use('/api/collection-groups', collectionGroupsRoutes);
 
 // --- Error handler (должен быть последним) ---
 app.use(errorHandler);
