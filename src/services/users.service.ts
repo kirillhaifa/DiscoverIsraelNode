@@ -1,3 +1,4 @@
+import type { Locale } from '../types';
 import { db } from '../config/firebase';
 import { User } from '../types';
 
@@ -9,7 +10,7 @@ export interface CreateUserData {
   surname: string | null;
   email: string;
   profilePicture: string | null;
-  language?: 'en' | 'he' | 'ru';
+  language?: Locale;
   colorTheme?: 'light' | 'dark';
 }
 
@@ -17,7 +18,7 @@ export interface UpdateUserData {
   name?: string | null;
   surname?: string | null;
   profilePicture?: string | null;
-  language?: 'en' | 'he' | 'ru';
+  language?: Locale;
   colorTheme?: 'light' | 'dark';
 }
 

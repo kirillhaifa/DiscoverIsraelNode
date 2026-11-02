@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import * as usersController from '../controllers/users.controller';
-import { authenticate } from '../middleware/authenticate';
+import { authenticate, authenticateUnverified } from '../middleware/authenticate';
 
 const router = Router();
 
 // POST /api/users/register — upsert профиля после Firebase Auth регистрации/первого входа
-router.post('/register', authenticate, usersController.register);
+router.post('/register', authenticateUnverified, usersController.register);
 
 // GET /api/users/me — получить профиль текущего пользователя
 router.get('/me', authenticate, usersController.getMe);

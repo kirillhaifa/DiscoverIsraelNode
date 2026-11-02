@@ -139,3 +139,16 @@ export async function updatePlace(
 
   return place;
 }
+
+/**
+ * Удалить место + сбросить полный кэш. Возвращает false, если места нет.
+ */
+export async function deletePlace(id: string): Promise<boolean> {
+  const docRef = db.collection('places').doc(id);
+  const doc = await docRef.get();
+  if (!doc.exists) return false;
+
+  await docRef.delete();
+  await invalidatePlacesCache();
+  return true;
+}

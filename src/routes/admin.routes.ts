@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requireAdmin } from '../middleware/authenticate';
 import { redisClient } from '../config/redis';
+import { getModerationCandidates, moveCandidate, MODERATION_MOVES } from '../services/candidates.service';
 
 const router = Router();
 
@@ -32,6 +33,49 @@ router.post(
       }
 
       res.json({ success: true, deleted: results });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/admin/moderation
+ * Места на модерации и с готовым переводом из placeCandidates.
+ */
+router.get(
+  '/moderation',
+  authenticate,
+  requireAdmin,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ success: true, data: await getModerationCandidates() });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/moderation/:id/status
+ * Body: { to: string }  — новый статус кандидата, см. MODERATION_MOVES.
+ */
+router.post(
+  '/moderation/:id/status',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { to } = req.body;
+      if (!Object.prototype.hasOwnProperty.call(MODERATION_MOVES, to)) {
+        res.status(400).json({ success: false, error: `Неизвестный статус ${to}` });
+        return;
+      }
+      if (!(await moveCandidate(String(req.params.id), to))) {
+        res.status(409).json({ success: false, error: 'Статус места уже изменился' });
+        return;
+      }
+      res.json({ success: true });
     } catch (error) {
       next(error);
     }

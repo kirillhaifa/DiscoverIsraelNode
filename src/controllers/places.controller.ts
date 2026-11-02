@@ -69,3 +69,21 @@ export async function updatePlace(req: Request<{ id: string }>, res: Response, n
     next(err);
   }
 }
+
+/**
+ * DELETE /api/places/:id — удалить место (admin only)
+ */
+export async function deletePlace(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  try {
+    const deleted = await placesService.deletePlace(req.params.id);
+
+    if (!deleted) {
+      res.status(404).json({ error: 'Place not found' });
+      return;
+    }
+
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}

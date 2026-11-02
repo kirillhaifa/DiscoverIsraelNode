@@ -19,4 +19,7 @@ router.post('/', authenticate, requireAdmin, placesController.createPlace);
 // PATCH /api/places/:id — обновить поля места (только admin)
 router.patch('/:id', authenticate, requireAdmin, placesController.updatePlace);
 
+// DELETE /api/places/:id — удалить место (только admin)
+router.delete('/:id', authenticate, requireAdmin, placesController.deletePlace);
+
 export default router;

@@ -14,12 +14,19 @@ export type Religion =
 
 export type PlaceTag = string; // 'hiking' | 'beach' | 'free' | 'bombShelter' | ...
 
+// Языки сайта — синхронно с DiscoverIsraelNext/i18n.config.ts
+export const LOCALES = ['ru', 'en', 'he', 'ar', 'es', 'pt', 'fr', 'de', 'it', 'am'] as const;
+export type Locale = (typeof LOCALES)[number];
+
+/** ru/en/he заполнены всегда, остальные языки — по мере перевода (фронт показывает en, если перевода нет). */
+export type LocalizedText = { ru: string; en: string; he: string } & Partial<Record<Locale, string>>;
+
 export interface Place {
   id: string;
   number: number;
-  placeName: { en: string; he: string; ru: string };
-  shortDescription: { en: string; he: string; ru: string };
-  extendedDescription: { en: string; he: string; ru: string };
+  placeName: LocalizedText;
+  shortDescription: LocalizedText;
+  extendedDescription: LocalizedText;
   photos: { photoName: string; photoWay: string }[];
   tags: PlaceTag[];
   religions: Religion[];
@@ -34,6 +41,12 @@ export interface Place {
   averageRating?: number;   // ratingsSum / ratingsCount, обновляется атомарно
   ratingsCount?: number;    // кол-во оценок
   ratingsSum?: number;      // сумма всех оценок — нужна для пересчёта без скана Users
+  closure?: PlaceClosure | null; // есть объект — на странице плашка «закрыто на неопределённый срок»
+}
+
+export interface PlaceClosure {
+  source: string;     // ссылка на официальное сообщение
+  checkedAt: string;  // дата проверки, YYYY-MM-DD
 }
 
 export interface PlacesFilter {
@@ -52,9 +65,9 @@ export interface Rating {
 
 export interface Collection {
   id: string;
-  title: { ru: string; en: string; he: string };
-  shortDescription: { ru: string; en: string; he: string };
-  longDescription: { ru: string; en: string; he: string };
+  title: LocalizedText;
+  shortDescription: LocalizedText;
+  longDescription: LocalizedText;
   coverPhoto: string;
   collectionPhotos?: string[];
   placeIds: string[];
@@ -65,9 +78,9 @@ export interface Collection {
 }
 
 export interface CreateCollectionData {
-  title: { ru: string; en: string; he: string };
-  shortDescription: { ru: string; en: string; he: string };
-  longDescription: { ru: string; en: string; he: string };
+  title: LocalizedText;
+  shortDescription: LocalizedText;
+  longDescription: LocalizedText;
   coverPhoto: string;
   collectionPhotos?: string[];
   placeIds: string[];
@@ -80,8 +93,8 @@ export interface CreateCollectionData {
  */
 export interface CollectionGroup {
   id: string;
-  title: { ru: string; en: string; he: string };
-  description: { ru: string; en: string; he: string };
+  title: LocalizedText;
+  description: LocalizedText;
   collectionIds: string[];  // id из коллекции `collections`
   coverPhoto: string;
   order: number;            // порядок отображения на лендинге
@@ -91,8 +104,8 @@ export interface CollectionGroup {
 }
 
 export interface CreateCollectionGroupData {
-  title: { ru: string; en: string; he: string };
-  description: { ru: string; en: string; he: string };
+  title: LocalizedText;
+  description: LocalizedText;
   collectionIds: string[];
   coverPhoto: string;
   order: number;
@@ -110,6 +123,6 @@ export interface User {
   plans: string[];       // legacy
   wishlist: string[];    // wishlist (сердечко)
   role: 'user' | 'admin';
-  language: 'en' | 'he' | 'ru';
+  language: Locale;
   colorTheme: 'light' | 'dark';
 }

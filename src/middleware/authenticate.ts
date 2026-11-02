@@ -17,12 +17,25 @@ declare global {
 }
 
 /**
- * Обязательная авторизация — вернёт 401 если токен отсутствует или невалиден.
+ * Обязательная авторизация — вернёт 401 если токен отсутствует или невалиден,
+ * 403 если почта не подтверждена (кроме админов).
  */
-export async function authenticate(
+export function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  return verifyUser(req, res, next, false);
+}
+
+/**
+ * Как authenticate, но пускает с неподтверждённой почтой: профиль создаётся до перехода по ссылке из письма.
+ */
+export function authenticateUnverified(req: Request, res: Response, next: NextFunction): Promise<void> {
+  return verifyUser(req, res, next, true);
+}
+
+async function verifyUser(
   req: Request,
   res: Response,
   next: NextFunction,
+  allowUnverified: boolean,
 ): Promise<void> {
   const authHeader = req.headers.authorization;
 
@@ -33,19 +46,22 @@ export async function authenticate(
 
   const token = authHeader.slice(7); // убираем "Bearer "
 
+  let decoded;
   try {
-    const decoded = await adminAuth.verifyIdToken(token);
-
-    req.user = {
-      uid: decoded.uid,
-      email: decoded.email,
-      role: decoded.role === 'admin' ? 'admin' : 'user',
-    };
-
-    next();
+    decoded = await adminAuth.verifyIdToken(token);
   } catch (err) {
     res.status(401).json({ error: 'Invalid or expired token' });
+    return;
   }
+
+  const role = decoded.role === 'admin' ? 'admin' : 'user';
+  if (!allowUnverified && decoded.email_verified !== true && role !== 'admin') {
+    res.status(403).json({ error: 'Email not verified' });
+    return;
+  }
+
+  req.user = { uid: decoded.uid, email: decoded.email, role };
+  next();
 }
 
 /**
