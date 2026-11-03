@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requireAdmin } from '../middleware/authenticate';
 import { redisClient } from '../config/redis';
-import { getModerationCandidates, moveCandidate, MODERATION_MOVES } from '../services/candidates.service';
+import { getModerationCandidates, moveCandidate, MODERATION_MOVES, MODERATION_PAGE_MAX } from '../services/candidates.service';
 
 const router = Router();
 
@@ -40,16 +40,19 @@ router.post(
 );
 
 /**
- * GET /api/admin/moderation
- * Места на модерации и с готовым переводом из placeCandidates.
+ * GET /api/admin/moderation?limit=20&after=<id>
+ * Страница мест на модерации и с готовым переводом из placeCandidates.
+ * Ответ: { data, total, nextCursor }. Следующая страница: after=nextCursor.
  */
 router.get(
   '/moderation',
   authenticate,
   requireAdmin,
-  async (_req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json({ success: true, data: await getModerationCandidates() });
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit), 10) || 20, 1), MODERATION_PAGE_MAX);
+      const after = typeof req.query.after === 'string' && req.query.after ? req.query.after : undefined;
+      res.json({ success: true, ...(await getModerationCandidates(limit, after)) });
     } catch (error) {
       next(error);
     }

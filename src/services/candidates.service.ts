@@ -1,3 +1,4 @@
+import { FieldPath } from 'firebase-admin/firestore';
 import { db } from '../config/firebase';
 
 const COLLECTION = 'placeCandidates';
@@ -48,9 +49,23 @@ function toModerationCard(id: string, d: FirebaseFirestore.DocumentData) {
   };
 }
 
-export async function getModerationCandidates() {
-  const snapshot = await db.collection(COLLECTION).where('status', 'in', MODERATION_STATUSES).get();
-  return snapshot.docs.map((doc) => toModerationCard(doc.id, doc.data()));
+export const MODERATION_PAGE_MAX = 100;
+
+/**
+ * Страница мест на модерации, по порядку id. after — id последнего места прошлой страницы.
+ * nextCursor равен null, если дальше мест нет.
+ */
+export async function getModerationCandidates(limit: number, after?: string) {
+  const base = db.collection(COLLECTION).where('status', 'in', MODERATION_STATUSES);
+  let page = base.orderBy(FieldPath.documentId()).limit(limit + 1);
+  if (after) page = page.startAfter(after);
+  const [snapshot, count] = await Promise.all([page.get(), base.count().get()]);
+  const docs = snapshot.docs.slice(0, limit);
+  return {
+    data: docs.map((doc) => toModerationCard(doc.id, doc.data())),
+    total: count.data().count,
+    nextCursor: snapshot.docs.length > limit ? docs[docs.length - 1].id : null,
+  };
 }
 
 /** Меняет статус кандидата. false, если текущий статус не позволяет такой переход. */
