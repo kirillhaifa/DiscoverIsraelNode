@@ -1,7 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requireAdmin } from '../middleware/authenticate';
 import { redisClient } from '../config/redis';
-import { getModerationCandidates, moveCandidate, MODERATION_MOVES, MODERATION_PAGE_MAX } from '../services/candidates.service';
+import {
+  getModerationCandidates,
+  moveCandidate,
+  publishCandidate,
+  PublishError,
+  MODERATION_MOVES,
+  MODERATION_PAGE_MAX,
+  MODERATION_STATUSES,
+  ModerationStatus,
+} from '../services/candidates.service';
 
 const router = Router();
 
@@ -40,8 +49,8 @@ router.post(
 );
 
 /**
- * GET /api/admin/moderation?limit=20&after=<id>
- * Страница мест на модерации и с готовым переводом из placeCandidates.
+ * GET /api/admin/moderation?status=moderation&limit=20&after=<id>
+ * Страница мест из placeCandidates: status=moderation — на модерации, status=translated — финальная проверка.
  * Ответ: { data, total, nextCursor }. Следующая страница: after=nextCursor.
  */
 router.get(
@@ -52,7 +61,12 @@ router.get(
     try {
       const limit = Math.min(Math.max(parseInt(String(req.query.limit), 10) || 20, 1), MODERATION_PAGE_MAX);
       const after = typeof req.query.after === 'string' && req.query.after ? req.query.after : undefined;
-      res.json({ success: true, ...(await getModerationCandidates(limit, after)) });
+      const status = (req.query.status ?? 'moderation') as ModerationStatus;
+      if (!MODERATION_STATUSES.includes(status)) {
+        res.status(400).json({ success: false, error: `Неизвестный статус ${status}` });
+        return;
+      }
+      res.json({ success: true, ...(await getModerationCandidates(status, limit, after)) });
     } catch (error) {
       next(error);
     }
@@ -80,6 +94,29 @@ router.post(
       }
       res.json({ success: true });
     } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/moderation/:id/publish
+ * Body: { collections: string[] } — коллекции из предложенных, которые админ подтвердил.
+ * Место с готовым переводом становится документом places с тем же id.
+ */
+router.post(
+  '/moderation/:id/publish',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const collections = Array.isArray(req.body?.collections) ? req.body.collections.map(String) : [];
+      res.json({ success: true, data: await publishCandidate(String(req.params.id), collections) });
+    } catch (error) {
+      if (error instanceof PublishError) {
+        res.status(error.status).json({ success: false, error: error.message });
+        return;
+      }
       next(error);
     }
   }

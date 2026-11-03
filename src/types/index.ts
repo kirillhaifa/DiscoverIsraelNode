@@ -27,11 +27,12 @@ export interface Place {
   placeName: LocalizedText;
   shortDescription: LocalizedText;
   extendedDescription: LocalizedText;
-  photos: { photoName: string; photoWay: string }[];
+  // author, license и sourcePage есть у фото из пайплайна: Commons и israel-in-photos требуют подпись
+  photos: { photoName: string; photoWay: string; author?: string | null; license?: string | null; sourcePage?: string | null }[];
   tags: PlaceTag[];
   religions: Religion[];
   schedule: unknown;
-  ticketPrice: { adult: string | null; child: string | null };
+  ticketPrice: { adult: string | null; child: string | null } | null; // null — цена неизвестна
   contact: { phone: string | null; website: string | null } | null;
   region: string;
   coordinates: [number, number];
