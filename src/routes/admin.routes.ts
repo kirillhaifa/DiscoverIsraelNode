@@ -50,7 +50,8 @@ router.post(
 
 /**
  * GET /api/admin/moderation?status=moderation&limit=20&after=<id>
- * Страница мест из placeCandidates: status=moderation — на модерации, status=translated — финальная проверка.
+ * Страница мест из placeCandidates: status=moderation — на модерации, status=ready_for_translation — одобрены
+ * и ждут перевода, status=translated — финальная проверка.
  * Ответ: { data, total, nextCursor }. Следующая страница: after=nextCursor.
  */
 router.get(

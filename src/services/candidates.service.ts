@@ -5,14 +5,16 @@ import { getAllPlaces, invalidatePlacesCache } from './places.service';
 import { invalidateCollectionsCache } from './collections.service';
 
 const COLLECTION = 'placeCandidates';
-// Вкладки админки: «На модерации» (английский текст) и «Финальная проверка» (с переводами)
-export const MODERATION_STATUSES = ['moderation', 'translated'] as const;
+// Вкладки админки: «На модерации» (английский текст), «Готово к переводу» (одобрены, ждут перевода)
+// и «Финальная проверка» (с переводами)
+export const MODERATION_STATUSES = ['moderation', 'ready_for_translation', 'translated'] as const;
 export type ModerationStatus = (typeof MODERATION_STATUSES)[number];
 // Куда можно перейти и откуда. Те же правила в tools/place-pipeline/review-server.mjs.
 // Из translated место уходит публикацией: publishCandidate, статус published.
 export const MODERATION_MOVES: Record<string, string[]> = {
+  moderation: ['ready_for_translation'],
   ready_for_translation: ['moderation'],
-  rejected_admin: ['moderation', 'translated'],
+  rejected_admin: ['moderation', 'ready_for_translation', 'translated'],
 };
 
 // Языки перевода: всё, кроме английского, он берётся из write и factcheck.
