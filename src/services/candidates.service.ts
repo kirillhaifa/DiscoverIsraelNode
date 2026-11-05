@@ -52,6 +52,8 @@ function toModerationCard(id: string, d: FirebaseFirestore.DocumentData) {
     tags: tags.tags,
     minVisitTime: tags.minVisitTime,
     season: tags.season,
+    religions: tags.religions ?? [],
+    removeKidsFriendly: !!tags.removeKidsFriendly,
     collections: collections.suggestions,
     flags: validate.flags,
     problems: validate.problems,
