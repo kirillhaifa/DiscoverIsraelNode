@@ -4,8 +4,14 @@ import { authenticate, requireAdmin } from '../middleware/authenticate';
 
 const router = Router();
 
-// GET /api/places — все места (с опциональными фильтрами)
+// GET /api/places — места: фильтры, view=card, lang, page/limit (см. контроллер)
 router.get('/', placesController.getAll);
+
+// GET /api/places/slugs — id и slug всех мест (до /:id, иначе 'slugs' примется за id)
+router.get('/slugs', placesController.getSlugs);
+
+// GET /api/places/by-slug/:slug — одно место по slug
+router.get('/by-slug/:slug', placesController.getBySlug);
 
 // DELETE /api/places/cache — инвалидация кэша (только admin)
 router.delete('/cache', authenticate, requireAdmin, placesController.invalidateCache);

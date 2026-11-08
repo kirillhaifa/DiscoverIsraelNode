@@ -23,6 +23,7 @@ export type LocalizedText = { ru: string; en: string; he: string } & Partial<Rec
 
 export interface Place {
   id: string;
+  slug: string;             // из placeName.en (utils/slug.ts), считается при чтении, в Firestore не хранится
   number: number;
   placeName: LocalizedText;
   shortDescription: LocalizedText;
@@ -57,7 +58,13 @@ export interface PlacesFilter {
   free?: boolean;          // tags.includes('free') || ticketPrice.adult === null
   minRating?: number;
   maxVisitTime?: number;   // minVisitTime <= maxVisitTime
+  ids?: string[];          // только эти места, в порядке ids
+  search?: string;         // подстрока в названии, коротком тексте или регионе на любом языке
 }
+
+/** card — без extendedDescription (90% веса), для списков и карточек */
+export type PlaceView = 'full' | 'card';
+export type PlaceCard = Omit<Place, 'extendedDescription'>;
 
 export interface Rating {
   placeId: string;

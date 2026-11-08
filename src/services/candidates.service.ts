@@ -67,6 +67,7 @@ function toModerationCard(id: string, d: FirebaseFirestore.DocumentData) {
     zone: territory.zone,
     closure: d.closure ?? null,
     website: d.website ?? null,
+    googleMapsLink: googleMapsLinkOf({ ...d, id }),
     translations: translate?.languages ?? null,
     translateProblems: translate?.problems ?? [],
     sources: d.sources.map((s: any) => ({ source: s.source, url: s.url })),
@@ -119,13 +120,28 @@ const toSlug = (name: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
+/**
+ * Ссылка на место в Google Maps. Поиск по названию (Maps URLs API): если Google узнаёт место, открывается его страница,
+ * иначе список результатов. Лучше всего узнаётся название из источника на иврите (Tiuli пишет и город: «חוף סירונית טבריה»).
+ * У точек OSM без своего имени название придумал писатель («Grill area near…»), такой страницы в Google нет: остаются координаты.
+ * Те же правила в tools/place-pipeline/review-server.mjs.
+ */
+export function googleMapsLinkOf(d: FirebaseFirestore.DocumentData) {
+  const [lat, lng] = d.coordinates;
+  const ownName = d.name?.he?.trim() || d.name?.en?.trim();
+  const name = ownName || (d.id?.startsWith?.('osm-') ? '' : d.stages?.write?.placeName?.he || d.stages?.write?.placeName?.en);
+  return name
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`
+    : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+}
+
 const commonsPage = (file: string) => `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file.replace(/ /g, '_'))}`;
 
 /**
  * Собирает документ места в формате коллекции places из кандидата с готовым переводом.
  * Расписания, цен и телефона пайплайн пока не собирает: они пустые, админ дополнит их на странице места.
  */
-export function buildPlace(d: FirebaseFirestore.DocumentData, number: number): Omit<Place, 'id'> {
+export function buildPlace(d: FirebaseFirestore.DocumentData, number: number): Omit<Place, 'id' | 'slug'> {
   const { write, factcheck, photos, tags, translate } = d.stages;
   const languages = translate?.languages ?? {};
   const missing = TRANSLATED_LOCALES.filter((l) => {
@@ -162,7 +178,7 @@ export function buildPlace(d: FirebaseFirestore.DocumentData, number: number): O
     contact: { phone: null, website: d.website ?? null },
     region: d.region,
     coordinates: [lat, lng],
-    googleMapsLink: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+    googleMapsLink: googleMapsLinkOf(d),
     minVisitTime: tags.minVisitTime,
     favoriteMonths: Object.fromEntries(MONTHS.map((m, i) => [m, months.includes(i)])),
     ...(d.closure ? { closure: d.closure } : {}),

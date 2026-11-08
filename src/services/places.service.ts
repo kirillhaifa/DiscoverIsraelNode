@@ -1,6 +1,7 @@
 import { db } from '../config/firebase';
-import { Place, PlacesFilter } from '../types';
+import { Locale, LocalizedText, Place, PlaceCard, PlacesFilter, PlaceView } from '../types';
 import { redisClient } from '../config/redis';
+import { toLegacySlug, toSlug } from '../utils/slug';
 
 const CACHE_KEY = 'places:all';
 const CACHE_TTL = 60 * 60 * 24; // 24 часа
@@ -20,6 +21,7 @@ function normalizePlace(id: string, data: FirebaseFirestore.DocumentData): Place
   return {
     ...data,
     id,
+    slug: toSlug(data.placeName?.en ?? ''),
     tags,
     religions: data.religions ?? [],
   } as Place;
@@ -29,7 +31,8 @@ export async function getAllPlaces(): Promise<Place[]> {
   // Проверяем Redis кэш
   const cached = await redisClient.get(CACHE_KEY);
   if (cached) {
-    return JSON.parse(cached) as Place[];
+    // slug не хранится в кэше, записанном до его появления
+    return (JSON.parse(cached) as Place[]).map(p => (p.slug ? p : { ...p, slug: toSlug(p.placeName?.en ?? '') }));
   }
 
   // Cache miss — читаем из Firestore
@@ -96,7 +99,54 @@ export async function getPlaces(filters: PlacesFilter = {}): Promise<Place[]> {
     places = places.filter(p => p.minVisitTime <= filters.maxVisitTime!);
   }
 
+  if (filters.search?.trim()) {
+    const q = filters.search.trim().toLowerCase();
+    const has = (t?: LocalizedText) => Object.values(t ?? {}).some(v => String(v).toLowerCase().includes(q));
+    places = places.filter(p => has(p.placeName) || has(p.shortDescription) || p.region?.toLowerCase().includes(q));
+  }
+
+  if (filters.ids) {
+    const byId = new Map(places.map(p => [p.id, p]));
+    places = filters.ids.map(id => byId.get(id)).filter((p): p is Place => !!p);
+  }
+
   return places;
+}
+
+const LOCALIZED_FIELDS = ['placeName', 'shortDescription', 'extendedDescription'] as const;
+
+/**
+ * Готовит место к ответу: card убирает extendedDescription,
+ * lang оставляет в текстах только этот язык и en (запасной, его показывает фронт без перевода).
+ */
+export function shapePlace(place: Place, view: PlaceView, lang?: Locale): Place | PlaceCard {
+  const out: Record<string, unknown> = { ...place };
+  if (view === 'card') delete out.extendedDescription;
+  if (lang) {
+    for (const field of LOCALIZED_FIELDS) {
+      const text = place[field];
+      if (field in out && text) {
+        out[field] = { en: text.en, ...(text[lang] !== undefined ? { [lang]: text[lang] } : {}) };
+      }
+    }
+  }
+  return out as unknown as Place | PlaceCard;
+}
+
+/** Место по slug. Старый формат slug тоже находит: фронт сам редиректит на канонический адрес. */
+export async function getPlaceBySlug(slug: string): Promise<Place | null> {
+  const s = slug.toLowerCase();
+  const places = await getAllPlaces();
+  return places.find(p => p.slug === s) ?? places.find(p => toLegacySlug(p.placeName?.en ?? '') === s) ?? null;
+}
+
+/** id и slug всех мест — для generateStaticParams и sitemap */
+export async function getPlaceSlugs(): Promise<{ id: string; slug: string; updatedAt?: string }[]> {
+  const places = await getAllPlaces();
+  return places.map(p => {
+    const updatedAt = (p as Place & { updatedAt?: string }).updatedAt;
+    return { id: p.id, slug: p.slug, ...(updatedAt ? { updatedAt } : {}) };
+  });
 }
 
 export async function getPlaceById(id: string): Promise<Place | null> {
@@ -108,7 +158,8 @@ export async function getPlaceById(id: string): Promise<Place | null> {
 /**
  * Создать новое место + сбросить полный кэш.
  */
-export async function createPlace(data: Omit<Place, 'id'>): Promise<Place> {
+export async function createPlace(input: Omit<Place, 'id' | 'slug'> & { slug?: string }): Promise<Place> {
+  const { slug: _slug, ...data } = input; // slug считается из названия, в базу не пишем
   const docRef = await db.collection('places').add(data);
   const place = normalizePlace(docRef.id, data as FirebaseFirestore.DocumentData);
   await invalidatePlacesCache(); // полный сброс — новый список будет запрошен при след запросе
@@ -122,7 +173,8 @@ export async function updatePlace(
   id: string,
   fields: Partial<Record<string, any>>
 ): Promise<Place> {
-  await db.collection('places').doc(id).update(fields);
+  const { slug: _slug, ...rest } = fields; // slug считается из названия, в базу не пишем
+  await db.collection('places').doc(id).update(rest);
   const updated = await db.collection('places').doc(id).get();
   const place = normalizePlace(id, updated.data()!);
 
