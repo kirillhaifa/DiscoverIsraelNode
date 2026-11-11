@@ -104,7 +104,7 @@ export async function getAll(req: Request, res: Response, next: NextFunction) {
 }
 
 /**
- * GET /api/places/map-points — точки для карты: { id, lngLat, tags, size } без текстов и фото.
+ * GET /api/places/map-points — точки для карты: { id, lngLat, tags } без текстов и фото.
  * Те же фильтры, что у GET /api/places. Карточку места карта грузит при наведении: GET /api/places/:id?view=card&lang=xx
  */
 export async function getMapPoints(req: Request, res: Response, next: NextFunction) {

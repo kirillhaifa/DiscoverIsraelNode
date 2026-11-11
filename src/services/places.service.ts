@@ -1,5 +1,5 @@
 import { db } from '../config/firebase';
-import { Locale, LocalizedText, MapPoint, MarkerSize, Place, PlaceCard, PlacesFilter, PlaceTag, PlaceView } from '../types';
+import { Locale, LocalizedText, MapPoint, Place, PlaceCard, PlacesFilter, PlaceTag, PlaceView } from '../types';
 import { redisClient } from '../config/redis';
 import { toLegacySlug, toSlug } from '../utils/slug';
 import { distanceKm, normalizeToLngLat } from '../utils/geo';
@@ -130,23 +130,12 @@ export async function getPlaces(filters: PlacesFilter = {}): Promise<Place[]> {
   return places;
 }
 
-/**
- * Размер точки на карте — по категории места:
- * национальный парк — large (как точки были раньше), кемпинг — small, остальное — medium.
- * Кемпинг внутри нацпарка (оба тега) считается нацпарком.
- */
-export function markerSize(tags: PlaceTag[]): MarkerSize {
-  if (tags.includes('nationalPark')) return 'large';
-  if (tags.includes('camping')) return 'small';
-  return 'medium';
-}
-
-/** Точки для карты: только id, координаты [lng, lat], теги и размер. Места с битыми координатами пропускаем. */
+/** Точки для карты: только id, координаты [lng, lat] и теги (размер точки фронт считает по тегам). Места с битыми координатами пропускаем. */
 export function toMapPoints(places: Place[]): MapPoint[] {
   const points: MapPoint[] = [];
   for (const p of places) {
     const lngLat = normalizeToLngLat(p.coordinates);
-    if (lngLat) points.push({ id: p.id, lngLat, tags: p.tags, size: markerSize(p.tags) });
+    if (lngLat) points.push({ id: p.id, lngLat, tags: p.tags });
   }
   return points;
 }

@@ -10,7 +10,7 @@ router.get('/', placesController.getAll);
 // GET /api/places/slugs — id и slug всех мест (до /:id, иначе 'slugs' примется за id)
 router.get('/slugs', placesController.getSlugs);
 
-// GET /api/places/map-points — лёгкие точки для карты (id, координаты, теги, размер); те же фильтры, что у списка
+// GET /api/places/map-points — лёгкие точки для карты (id, координаты, теги); те же фильтры, что у списка
 router.get('/map-points', placesController.getMapPoints);
 
 // GET /api/places/by-slug/:slug — одно место по slug

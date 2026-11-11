@@ -65,18 +65,11 @@ export interface PlacesFilter {
   near?: { lat: number; lng: number; radiusKm: number }; // не дальше radiusKm от точки
 }
 
-/**
- * Размер точки на карте. Считается на бэкенде (services/places.service.ts → markerSize),
- * чтобы правило было одно для всех клиентов.
- */
-export type MarkerSize = 'large' | 'medium' | 'small';
-
 /** Лёгкая точка для карты: без текстов и фото, карточка грузится отдельно при наведении */
 export interface MapPoint {
   id: string;
   lngLat: [number, number]; // уже в порядке [lng, lat], в базе встречаются оба порядка
-  tags: PlaceTag[];
-  size: MarkerSize;
+  tags: PlaceTag[]; // по ним фронт выбирает цвет и размер точки
 }
 
 /** card — без extendedDescription (90% веса), для списков и карточек */
