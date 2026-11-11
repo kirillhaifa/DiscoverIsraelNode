@@ -60,6 +60,23 @@ export interface PlacesFilter {
   maxVisitTime?: number;   // minVisitTime <= maxVisitTime
   ids?: string[];          // только эти места, в порядке ids
   search?: string;         // подстрока в названии, коротком тексте или регионе на любом языке
+  tagsMatch?: 'any' | 'all'; // как совпадают tags: any (по умолчанию) или все сразу
+  excludeIds?: string[];   // убрать эти места (фильтр «непосещённые»: id мест, оценённых пользователем)
+  near?: { lat: number; lng: number; radiusKm: number }; // не дальше radiusKm от точки
+}
+
+/**
+ * Размер точки на карте. Считается на бэкенде (services/places.service.ts → markerSize),
+ * чтобы правило было одно для всех клиентов.
+ */
+export type MarkerSize = 'large' | 'medium' | 'small';
+
+/** Лёгкая точка для карты: без текстов и фото, карточка грузится отдельно при наведении */
+export interface MapPoint {
+  id: string;
+  lngLat: [number, number]; // уже в порядке [lng, lat], в базе встречаются оба порядка
+  tags: PlaceTag[];
+  size: MarkerSize;
 }
 
 /** card — без extendedDescription (90% веса), для списков и карточек */

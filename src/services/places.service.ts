@@ -1,7 +1,8 @@
 import { db } from '../config/firebase';
-import { Locale, LocalizedText, Place, PlaceCard, PlacesFilter, PlaceView } from '../types';
+import { Locale, LocalizedText, MapPoint, MarkerSize, Place, PlaceCard, PlacesFilter, PlaceTag, PlaceView } from '../types';
 import { redisClient } from '../config/redis';
 import { toLegacySlug, toSlug } from '../utils/slug';
+import { distanceKm, normalizeToLngLat } from '../utils/geo';
 
 const CACHE_KEY = 'places:all';
 const CACHE_TTL = 60 * 60 * 24; // 24 часа
@@ -76,7 +77,10 @@ export async function getPlaces(filters: PlacesFilter = {}): Promise<Place[]> {
   }
 
   if (filters.tags?.length) {
-    places = places.filter(p => filters.tags!.some(tag => p.tags.includes(tag)));
+    const tags = filters.tags;
+    places = filters.tagsMatch === 'all'
+      ? places.filter(p => tags.every(tag => p.tags.includes(tag)))
+      : places.filter(p => tags.some(tag => p.tags.includes(tag)));
   }
 
   if (filters.religions?.length) {
@@ -105,12 +109,51 @@ export async function getPlaces(filters: PlacesFilter = {}): Promise<Place[]> {
     places = places.filter(p => has(p.placeName) || has(p.shortDescription) || p.region?.toLowerCase().includes(q));
   }
 
+  if (filters.excludeIds?.length) {
+    const exclude = new Set(filters.excludeIds);
+    places = places.filter(p => !exclude.has(p.id));
+  }
+
+  if (filters.near) {
+    const { lat, lng, radiusKm } = filters.near;
+    places = places.filter(p => {
+      const lngLat = normalizeToLngLat(p.coordinates);
+      return !!lngLat && distanceKm(lat, lng, lngLat[1], lngLat[0]) <= radiusKm;
+    });
+  }
+
   if (filters.ids) {
     const byId = new Map(places.map(p => [p.id, p]));
     places = filters.ids.map(id => byId.get(id)).filter((p): p is Place => !!p);
   }
 
   return places;
+}
+
+/**
+ * Размер точки на карте — по категории места:
+ * национальный парк — large (как точки были раньше), кемпинг — small, остальное — medium.
+ * Кемпинг внутри нацпарка (оба тега) считается нацпарком.
+ */
+export function markerSize(tags: PlaceTag[]): MarkerSize {
+  if (tags.includes('nationalPark')) return 'large';
+  if (tags.includes('camping')) return 'small';
+  return 'medium';
+}
+
+/** Точки для карты: только id, координаты [lng, lat], теги и размер. Места с битыми координатами пропускаем. */
+export function toMapPoints(places: Place[]): MapPoint[] {
+  const points: MapPoint[] = [];
+  for (const p of places) {
+    const lngLat = normalizeToLngLat(p.coordinates);
+    if (lngLat) points.push({ id: p.id, lngLat, tags: p.tags, size: markerSize(p.tags) });
+  }
+  return points;
+}
+
+/** Место из кэша (тот же источник, что у списка); null — такого id нет */
+export async function getCachedPlaceById(id: string): Promise<Place | null> {
+  return (await getAllPlaces()).find(p => p.id === id) ?? null;
 }
 
 const LOCALIZED_FIELDS = ['placeName', 'shortDescription', 'extendedDescription'] as const;

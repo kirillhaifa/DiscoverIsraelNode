@@ -18,31 +18,60 @@ function parseShape(query: Request['query']): { view: PlaceView; lang?: Locale }
 }
 
 /**
+ * Фильтры из query — общие для списка (GET /api/places) и карты (GET /api/places/map-points).
+ * region, tags (+ tagsMatch=all|any), religions, free, minRating, maxVisitTime, ids, excludeIds, search,
+ * near=lat,lng + radiusKm. Строка — текст ошибки для 400.
+ */
+function parseFilters(query: Request['query']): PlacesFilter | string {
+  const { region, tags, tagsMatch, religions, free, minRating, maxVisitTime, ids, excludeIds, search, near, radiusKm } = query;
+
+  if (tagsMatch !== undefined && tagsMatch !== 'all' && tagsMatch !== 'any') return 'tagsMatch must be all or any';
+
+  let nearFilter: PlacesFilter['near'];
+  if (near !== undefined || radiusKm !== undefined) {
+    const [lat, lng] = String(near ?? '').split(',').map(Number);
+    const radius = Number(radiusKm);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius) || radius <= 0) {
+      return 'near must be lat,lng and radiusKm a positive number';
+    }
+    nearFilter = { lat, lng, radiusKm: radius };
+  }
+
+  return {
+    region: region as string | undefined,
+    tags: list(tags),
+    tagsMatch: tagsMatch as PlacesFilter['tagsMatch'],
+    religions: list(religions) as PlacesFilter['religions'],
+    free: free === 'true' ? true : undefined,
+    minRating: minRating ? Number(minRating) : undefined,
+    maxVisitTime: maxVisitTime ? Number(maxVisitTime) : undefined,
+    ids: list(ids),
+    excludeIds: list(excludeIds),
+    search: search as string | undefined,
+    near: nearFilter,
+  };
+}
+
+/**
  * GET /api/places
- * Фильтры: region, tags, religions, free, minRating, maxVisitTime, ids, search.
+ * Фильтры — см. parseFilters.
  * view=card — без extendedDescription; lang=xx — тексты только на xx и en.
  * page/limit — пагинация (limit по умолчанию 20, максимум 100). Без них — весь список, как раньше.
  */
 export async function getAll(req: Request, res: Response, next: NextFunction) {
   try {
-    const { region, tags, religions, free, minRating, maxVisitTime, ids, search, page, limit } = req.query;
+    const { page, limit } = req.query;
 
     const shape = parseShape(req.query);
     if (typeof shape === 'string') {
       res.status(400).json({ error: shape });
       return;
     }
-
-    const filters: PlacesFilter = {
-      region: region as string | undefined,
-      tags: list(tags),
-      religions: list(religions) as PlacesFilter['religions'],
-      free: free === 'true' ? true : undefined,
-      minRating: minRating ? Number(minRating) : undefined,
-      maxVisitTime: maxVisitTime ? Number(maxVisitTime) : undefined,
-      ids: list(ids),
-      search: search as string | undefined,
-    };
+    const filters = parseFilters(req.query);
+    if (typeof filters === 'string') {
+      res.status(400).json({ error: filters });
+      return;
+    }
 
     const places = await placesService.getPlaces(filters);
     const shapeAll = (items: Place[]) => items.map(p => placesService.shapePlace(p, shape.view, shape.lang));
@@ -69,6 +98,24 @@ export async function getAll(req: Request, res: Response, next: NextFunction) {
       limit: limitNum,
       hasMore: start + limitNum < places.length,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/places/map-points — точки для карты: { id, lngLat, tags, size } без текстов и фото.
+ * Те же фильтры, что у GET /api/places. Карточку места карта грузит при наведении: GET /api/places/:id?view=card&lang=xx
+ */
+export async function getMapPoints(req: Request, res: Response, next: NextFunction) {
+  try {
+    const filters = parseFilters(req.query);
+    if (typeof filters === 'string') {
+      res.status(400).json({ error: filters });
+      return;
+    }
+    const data = placesService.toMapPoints(await placesService.getPlaces(filters));
+    res.json({ data, count: data.length });
   } catch (err) {
     next(err);
   }
@@ -112,9 +159,27 @@ export async function invalidateCache(_req: Request, res: Response, next: NextFu
   }
 }
 
+/**
+ * GET /api/places/:id — место из Firestore целиком.
+ * С view или lang — из кэша и в этой форме (карточка при наведении на точку карты: view=card&lang=xx).
+ */
 export async function getById(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
+    if (req.query.view !== undefined || req.query.lang !== undefined) {
+      const shape = parseShape(req.query);
+      if (typeof shape === 'string') {
+        res.status(400).json({ error: shape });
+        return;
+      }
+      const cached = await placesService.getCachedPlaceById(id);
+      if (!cached) {
+        res.status(404).json({ error: 'Place not found' });
+        return;
+      }
+      res.json({ data: placesService.shapePlace(cached, shape.view, shape.lang) });
+      return;
+    }
     const place = await placesService.getPlaceById(id);
     if (!place) {
       res.status(404).json({ error: 'Place not found' });

@@ -10,13 +10,16 @@ router.get('/', placesController.getAll);
 // GET /api/places/slugs — id и slug всех мест (до /:id, иначе 'slugs' примется за id)
 router.get('/slugs', placesController.getSlugs);
 
+// GET /api/places/map-points — лёгкие точки для карты (id, координаты, теги, размер); те же фильтры, что у списка
+router.get('/map-points', placesController.getMapPoints);
+
 // GET /api/places/by-slug/:slug — одно место по slug
 router.get('/by-slug/:slug', placesController.getBySlug);
 
 // DELETE /api/places/cache — инвалидация кэша (только admin)
 router.delete('/cache', authenticate, requireAdmin, placesController.invalidateCache);
 
-// GET /api/places/:id — одно место по ID
+// GET /api/places/:id — одно место по ID (?view=card&lang=xx — карточка из кэша)
 router.get('/:id', placesController.getById);
 
 // POST /api/places — создать место (только admin)
