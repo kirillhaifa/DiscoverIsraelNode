@@ -6,6 +6,10 @@ import { distanceKm, normalizeToLngLat } from '../utils/geo';
 
 const CACHE_KEY = 'places:all';
 const CACHE_TTL = 60 * 60 * 24; // 24 часа
+/** Версия списка мест: меняется при любой правке. Процессы сверяют её и перечитывают список только при смене */
+const VERSION_KEY = 'places:version';
+/** Как часто процесс сверяет версию с Redis. Свои правки процесс видит сразу, чужие — не позже чем через это время */
+const VERSION_CHECK_MS = 2000;
 
 /**
  * Нормализует документ из Firestore в тип Place.
@@ -28,45 +32,148 @@ function normalizePlace(id: string, data: FirebaseFirestore.DocumentData): Place
   } as Place;
 }
 
-export async function getAllPlaces(): Promise<Place[]> {
-  // Проверяем Redis кэш
-  const cached = await redisClient.get(CACHE_KEY);
-  if (cached) {
-    // slug не хранится в кэше, записанном до его появления
-    return (JSON.parse(cached) as Place[]).map(p => (p.slug ? p : { ...p, slug: toSlug(p.placeName?.en ?? '') }));
-  }
-
-  // Cache miss — читаем из Firestore
-  const snapshot = await db.collection('places').get();
-  const places = snapshot.docs.map((doc) => normalizePlace(doc.id, doc.data()));
-
-  // Сохраняем в Redis на 24ч
-  await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(places));
-
-  return places;
+/**
+ * Список мест в памяти процесса: разбирается из Redis один раз на версию, а не на каждый запрос.
+ * Массив и объекты общие для всех запросов — только читать (filter/map/копии), никогда не менять на месте.
+ */
+interface PlacesMemory {
+  version: string;
+  places: Place[];
+  byId: Map<string, Place>;
+  bySlug: Map<string, Place>;
 }
 
-export async function invalidatePlacesCache(): Promise<void> {
-  await redisClient.del(CACHE_KEY);
+let memory: PlacesMemory | null = null;
+let checkedAt = 0;
+let loading: Promise<PlacesMemory> | null = null;
+
+/** Текст для поиска (название и краткое описание на всех языках + регион) в нижнем регистре — считается один раз на объект */
+const searchTextCache = new WeakMap<Place, string>();
+function searchText(p: Place): string {
+  let text = searchTextCache.get(p);
+  if (text === undefined) {
+    const all = (t?: LocalizedText) => Object.values(t ?? {}).map(v => String(v)).join('\n');
+    text = [all(p.placeName), all(p.shortDescription), p.region ?? ''].join('\n').toLowerCase();
+    searchTextCache.set(p, text);
+  }
+  return text;
+}
+
+function buildMemory(version: string, places: Place[]): PlacesMemory {
+  // slug не хранится в кэше, записанном до его появления
+  const withSlug = places.map(p => (p.slug ? p : { ...p, slug: toSlug(p.placeName?.en ?? '') }));
+  return {
+    version,
+    places: withSlug,
+    byId: new Map(withSlug.map(p => [p.id, p])),
+    bySlug: new Map(withSlug.map(p => [p.slug, p])),
+  };
+}
+
+const newVersion = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+/** Текущая версия из Redis; если её ещё нет (первый запуск) — создаём */
+async function readVersion(): Promise<string> {
+  const version = await redisClient.get(VERSION_KEY);
+  if (version) return version;
+  const created = newVersion();
+  await redisClient.set(VERSION_KEY, created, { NX: true });
+  return (await redisClient.get(VERSION_KEY)) ?? created;
+}
+
+async function loadMemory(version: string): Promise<PlacesMemory> {
+  const cached = await redisClient.get(CACHE_KEY);
+  if (cached) return buildMemory(version, JSON.parse(cached) as Place[]);
+
+  // Cache miss — читаем из Firestore и кладём в Redis для остальных процессов
+  const snapshot = await db.collection('places').get();
+  const places = snapshot.docs.map((doc) => normalizePlace(doc.id, doc.data()));
+  await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(places));
+  return buildMemory(version, places);
+}
+
+async function getMemory(): Promise<PlacesMemory> {
+  if (memory && Date.now() - checkedAt < VERSION_CHECK_MS) return memory;
+  const version = await readVersion();
+  checkedAt = Date.now();
+  if (memory && memory.version === version) return memory;
+  // одновременные запросы ждут одну загрузку, а не грузят каждый свою
+  if (!loading) {
+    loading = loadMemory(version)
+      .then((m) => { memory = m; return m; })
+      .finally(() => { loading = null; });
+  }
+  return loading;
+}
+
+/** Все места. Общий массив из памяти — не менять */
+export async function getAllPlaces(): Promise<Place[]> {
+  return (await getMemory()).places;
 }
 
 /**
- * Точечно обновляет одно место в Redis-кэше без полного сброса.
+ * Сохранить новый список: в Redis (для других процессов), новая версия, сразу в память этого процесса.
+ * Redis-кэш не перечитывается: список берётся из памяти, поэтому правка не тянет мегабайты из Redis.
+ */
+async function savePlaces(places: Place[]): Promise<void> {
+  const version = newVersion();
+  await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(places));
+  await redisClient.set(VERSION_KEY, version);
+  memory = buildMemory(version, places);
+  checkedAt = Date.now();
+}
+
+/** Полный сброс: следующий запрос перечитает места из Firestore */
+export async function invalidatePlacesCache(): Promise<void> {
+  await redisClient.del(CACHE_KEY);
+  await redisClient.set(VERSION_KEY, newVersion());
+  memory = null;
+}
+
+/** Записи в кэш идут по очереди: иначе две одновременные оценки взяли бы один и тот же список и вторая затёрла бы первую */
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+/** Заменить одно место в кэше новым объектом (не меняя старый — его могут читать другие запросы) */
+function replaceInCache(placeId: string, next: (old: Place) => Place): Promise<void> {
+  const run = writeQueue.then(async () => {
+    const { places, byId } = await getMemory();
+    const old = byId.get(placeId);
+    if (!old) return;
+    const updated = next(old);
+    await savePlaces(places.map((p) => (p.id === placeId ? updated : p)));
+  });
+  writeQueue = run.catch(() => {}); // ошибка одной записи не блокирует следующие
+  return run;
+}
+
+/**
+ * Точечно обновляет одно место в кэше без полного сброса.
  * Используется после изменения рейтинга — не инвалидирует весь кэш.
  */
 export async function updatePlaceInCache(
   placeId: string,
   fields: Partial<Pick<Place, 'averageRating' | 'ratingsCount' | 'ratingsSum'>>,
 ): Promise<void> {
-  const cached = await redisClient.get(CACHE_KEY);
-  if (!cached) return; // кэша нет — нечего обновлять, следующий запрос сам заполнит
+  await replaceInCache(placeId, (old) => ({ ...old, ...fields }));
+}
 
-  const places: Place[] = JSON.parse(cached);
-  const idx = places.findIndex((p) => p.id === placeId);
-  if (idx === -1) return;
+/** Все теги, которые встречаются у мест — подсказки в редакторе тегов */
+export async function getAllTags(): Promise<string[]> {
+  const set = new Set<string>();
+  for (const p of await getAllPlaces()) for (const tag of p.tags ?? []) set.add(tag);
+  return [...set].sort();
+}
 
-  places[idx] = { ...places[idx], ...fields };
-  await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(places));
+/** Сортировка списка: rating — лучшие по оценке (только оценённые), popular — больше всего оценок */
+export type PlacesSort = 'rating' | 'popular';
+
+export function sortPlaces(places: Place[], sort: PlacesSort): Place[] {
+  if (sort === 'rating') {
+    return places
+      .filter(p => typeof p.averageRating === 'number' && (p.ratingsCount ?? 0) > 0)
+      .sort((a, b) => (b.averageRating ?? 0) - (a.averageRating ?? 0) || (b.ratingsCount ?? 0) - (a.ratingsCount ?? 0));
+  }
+  return [...places].sort((a, b) => (b.ratingsCount ?? 0) - (a.ratingsCount ?? 0));
 }
 
 export async function getPlaces(filters: PlacesFilter = {}): Promise<Place[]> {
@@ -105,8 +212,7 @@ export async function getPlaces(filters: PlacesFilter = {}): Promise<Place[]> {
 
   if (filters.search?.trim()) {
     const q = filters.search.trim().toLowerCase();
-    const has = (t?: LocalizedText) => Object.values(t ?? {}).some(v => String(v).toLowerCase().includes(q));
-    places = places.filter(p => has(p.placeName) || has(p.shortDescription) || p.region?.toLowerCase().includes(q));
+    places = places.filter(p => searchText(p).includes(q));
   }
 
   if (filters.excludeIds?.length) {
@@ -142,7 +248,7 @@ export function toMapPoints(places: Place[]): MapPoint[] {
 
 /** Место из кэша (тот же источник, что у списка); null — такого id нет */
 export async function getCachedPlaceById(id: string): Promise<Place | null> {
-  return (await getAllPlaces()).find(p => p.id === id) ?? null;
+  return (await getMemory()).byId.get(id) ?? null;
 }
 
 const LOCALIZED_FIELDS = ['placeName', 'shortDescription', 'extendedDescription'] as const;
@@ -168,8 +274,8 @@ export function shapePlace(place: Place, view: PlaceView, lang?: Locale): Place 
 /** Место по slug. Старый формат slug тоже находит: фронт сам редиректит на канонический адрес. */
 export async function getPlaceBySlug(slug: string): Promise<Place | null> {
   const s = slug.toLowerCase();
-  const places = await getAllPlaces();
-  return places.find(p => p.slug === s) ?? places.find(p => toLegacySlug(p.placeName?.en ?? '') === s) ?? null;
+  const { places, bySlug } = await getMemory();
+  return bySlug.get(s) ?? places.find(p => toLegacySlug(p.placeName?.en ?? '') === s) ?? null;
 }
 
 /** id и slug всех мест — для generateStaticParams и sitemap */
@@ -199,7 +305,7 @@ export async function createPlace(input: Omit<Place, 'id' | 'slug'> & { slug?: s
 }
 
 /**
- * Обновить произвольные поля места + точечно обновить кэш через updatePlaceInCache.
+ * Обновить произвольные поля места + точечно заменить его в кэше.
  */
 export async function updatePlace(
   id: string,
@@ -210,16 +316,8 @@ export async function updatePlace(
   const updated = await db.collection('places').doc(id).get();
   const place = normalizePlace(id, updated.data()!);
 
-  // Точечно обновляем весь объект в кэше
-  const cached = await redisClient.get(CACHE_KEY);
-  if (cached) {
-    const places: Place[] = JSON.parse(cached);
-    const idx = places.findIndex((p) => p.id === id);
-    if (idx !== -1) {
-      places[idx] = place;
-      await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(places));
-    }
-  }
+  // Точечно заменяем место в кэше (память, Redis, новая версия)
+  await replaceInCache(id, () => place);
 
   return place;
 }

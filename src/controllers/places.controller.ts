@@ -1,9 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import * as placesService from '../services/places.service';
+import { isInternalRequest } from '../middleware/trusted';
 import { LOCALES, Locale, Place, PlacesFilter, PlaceView } from '../types';
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 20;
+/** Сколько мест можно взять по ids без пагинации (профиль, планировщик, коллекции) */
+const MAX_IDS = 200;
 
 const list = (v: unknown) =>
   typeof v === 'string' && v.trim() ? v.split(',').map(x => x.trim()).filter(Boolean) : undefined;
@@ -56,7 +59,10 @@ function parseFilters(query: Request['query']): PlacesFilter | string {
  * GET /api/places
  * Фильтры — см. parseFilters.
  * view=card — без extendedDescription; lang=xx — тексты только на xx и en.
- * page/limit — пагинация (limit по умолчанию 20, максимум 100). Без них — весь список, как раньше.
+ * sort=rating|popular — лучшие по оценке (только оценённые) или с наибольшим числом оценок.
+ * page/limit — пагинация (limit по умолчанию 20, максимум 100).
+ * Без page/limit: с ids (до 200) — все эти места; иначе весь список, но только админу и доверенному серверу
+ * (x-internal-key), остальным 400 — полный список весит мегабайты.
  */
 export async function getAll(req: Request, res: Response, next: NextFunction) {
   try {
@@ -73,10 +79,25 @@ export async function getAll(req: Request, res: Response, next: NextFunction) {
       return;
     }
 
-    const places = await placesService.getPlaces(filters);
+    const { sort } = req.query;
+    if (sort !== undefined && sort !== 'rating' && sort !== 'popular') {
+      res.status(400).json({ error: 'sort must be rating or popular' });
+      return;
+    }
+    if (filters.ids && filters.ids.length > MAX_IDS) {
+      res.status(400).json({ error: `ids: at most ${MAX_IDS}` });
+      return;
+    }
+
+    let places = await placesService.getPlaces(filters);
+    if (sort) places = placesService.sortPlaces(places, sort);
     const shapeAll = (items: Place[]) => items.map(p => placesService.shapePlace(p, shape.view, shape.lang));
 
     if (page === undefined && limit === undefined) {
+      if (!filters.ids && req.user?.role !== 'admin' && !isInternalRequest(req)) {
+        res.status(400).json({ error: `page/limit required (limit up to ${MAX_LIMIT}) or ids` });
+        return;
+      }
       res.json({ data: shapeAll(places), count: places.length });
       return;
     }
@@ -116,6 +137,15 @@ export async function getMapPoints(req: Request, res: Response, next: NextFuncti
     }
     const data = placesService.toMapPoints(await placesService.getPlaces(filters));
     res.json({ data, count: data.length });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /api/places/tags — все теги, которые есть у мест (подсказки в редакторе тегов) */
+export async function getTags(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ data: await placesService.getAllTags() });
   } catch (err) {
     next(err);
   }

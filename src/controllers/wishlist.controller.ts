@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as wishlistService from '../services/wishlist.service';
+import { shapePlace } from '../services/places.service';
 
 /**
  * POST /api/users/me/wishlist/:placeId
@@ -38,7 +39,8 @@ export async function remove(req: Request<{ placeId: string }>, res: Response, n
 export async function getWishlist(req: Request, res: Response, next: NextFunction) {
   try {
     const uid = req.user!.uid;
-    const places = await wishlistService.getWishlistPlaces(uid);
+    // карточки без extendedDescription: длинный текст нужен только на странице места
+    const places = (await wishlistService.getWishlistPlaces(uid)).map((p) => shapePlace(p, 'card'));
     res.json({ data: places, count: places.length });
   } catch (err) {
     next(err);

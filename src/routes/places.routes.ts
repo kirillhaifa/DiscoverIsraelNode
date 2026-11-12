@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import * as placesController from '../controllers/places.controller';
-import { authenticate, requireAdmin } from '../middleware/authenticate';
+import { authenticate, optionalAuth, requireAdmin } from '../middleware/authenticate';
 
 const router = Router();
 
-// GET /api/places — места: фильтры, view=card, lang, page/limit (см. контроллер)
-router.get('/', placesController.getAll);
+// GET /api/places — места: фильтры, sort, view=card, lang, page/limit (см. контроллер).
+// optionalAuth: полный список без пагинации отдаётся только админу
+router.get('/', optionalAuth, placesController.getAll);
+
+// GET /api/places/tags — все теги мест (до /:id)
+router.get('/tags', placesController.getTags);
 
 // GET /api/places/slugs — id и slug всех мест (до /:id, иначе 'slugs' примется за id)
 router.get('/slugs', placesController.getSlugs);

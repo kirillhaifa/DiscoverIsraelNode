@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requireAdmin } from '../middleware/authenticate';
 import { redisClient } from '../config/redis';
+import { invalidatePlacesCache } from '../services/places.service';
 import {
   getModerationCandidates,
   moveCandidate,
@@ -39,6 +40,8 @@ router.post(
       const results: Record<string, number> = {};
       for (const key of keys) {
         results[key] = await redisClient.del(key);
+        // места ещё и в памяти процессов: меняем версию, иначе они продолжат отдавать старый список
+        if (key === 'places:all') await invalidatePlacesCache();
       }
 
       res.json({ success: true, deleted: results });
